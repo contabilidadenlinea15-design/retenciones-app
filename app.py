@@ -109,7 +109,7 @@ def fmt(n):
 
 
 def generar_numero_comprobante(sb, emp_id, tipo, fecha):
-    """Genera número secuencial YYYYMM00000NNN."""
+    """Genera número correlativo de 14 dígitos: YYYYMM00000NNN."""
     anio = fecha.year
     mes = fecha.month
     # Buscar secuencia existente
@@ -119,12 +119,19 @@ def generar_numero_comprobante(sb, emp_id, tipo, fecha):
         nuevo = seq["ultimo_numero"] + 1
         sb.table("secuencias_comprobantes").update({"ultimo_numero": nuevo}).eq("id", seq["id"]).execute()
     else:
-        nuevo = 1
+        # Buscar número inicial configurado para esta empresa y tipo
+        try:
+            cfg = sb.table("config_comprobantes").select("numero_inicial").eq(
+                "empresa_id", emp_id
+            ).eq("tipo", tipo).execute()
+            nuevo = cfg.data[0]["numero_inicial"] if cfg.data else 1
+        except Exception:
+            nuevo = 1
         sb.table("secuencias_comprobantes").insert({
             "empresa_id": emp_id, "tipo": tipo,
             "anio": anio, "mes": mes, "ultimo_numero": nuevo
         }).execute()
-    return f"{anio}{mes:02d}{nuevo:010d}"
+    return f"{anio}{mes:02d}{nuevo:08d}"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -981,7 +988,7 @@ def page_admin():
         st.error("Acceso restringido a administradores.")
         return
 
-    tab1, tab2, tab3 = st.tabs(["🏢 Empresas", "👤 Usuarios", "📊 Códigos ISLR"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏢 Empresas", "👤 Usuarios", "📊 Códigos ISLR", "🔢 Comprobantes"])
 
     # ── Empresas ──
     with tab1:
@@ -1085,6 +1092,66 @@ def page_admin():
                     }).execute()
                     st.success(f"Código {cod_nuevo} agregado")
                     st.rerun()
+
+
+    # ── Configuración Comprobantes ──
+    with tab4:
+        eid_admin = empresa_id()
+        if eid_admin:
+            st.markdown("### Configuración de Numeración")
+            st.info("Configure el número inicial para los comprobantes de cada tipo. "
+                    "Al iniciar un nuevo mes, la secuencia comenzará desde este número.")
+
+            try:
+                for tipo_comp in ["IVA", "ISLR"]:
+                    st.markdown(f"**Retención {tipo_comp}**")
+                    # Leer config actual
+                    cfg = sb.table("config_comprobantes").select("*").eq(
+                        "empresa_id", eid_admin
+                    ).eq("tipo", tipo_comp).execute()
+                    num_actual = cfg.data[0]["numero_inicial"] if cfg.data else 1
+
+                    with st.form(f"form_config_{tipo_comp}"):
+                        nuevo_inicio = st.number_input(
+                            f"Número inicial para {tipo_comp}",
+                            min_value=1, max_value=99999999,
+                            value=num_actual, step=1,
+                            key=f"cfg_inicio_{tipo_comp}"
+                        )
+                        if st.form_submit_button(f"💾 Guardar config {tipo_comp}"):
+                            if cfg.data:
+                                sb.table("config_comprobantes").update({
+                                    "numero_inicial": nuevo_inicio
+                                }).eq("id", cfg.data[0]["id"]).execute()
+                            else:
+                                sb.table("config_comprobantes").insert({
+                                    "empresa_id": eid_admin,
+                                    "tipo": tipo_comp,
+                                    "numero_inicial": nuevo_inicio
+                                }).execute()
+                            st.success(f"✅ Número inicial de {tipo_comp} actualizado a {nuevo_inicio}")
+                            st.rerun()
+            except Exception:
+                st.warning("⚠️ La tabla config_comprobantes no existe aún. "
+                           "Ejecute el SQL de creación en Supabase.")
+
+            # Mostrar secuencias activas
+            st.divider()
+            st.markdown("### Secuencias Activas")
+            seqs = sb.table("secuencias_comprobantes").select("*").eq(
+                "empresa_id", eid_admin
+            ).order("anio", desc=True).order("mes", desc=True).execute().data or []
+            if seqs:
+                df_seq = pd.DataFrame(seqs)[["tipo", "anio", "mes", "ultimo_numero"]]
+                df_seq.columns = ["Tipo", "Año", "Mes", "Último Nro"]
+                df_seq["Último Comprobante"] = df_seq.apply(
+                    lambda r: f"{int(r['Año'])}{int(r['Mes']):02d}{int(r['Último Nro']):08d}", axis=1
+                )
+                st.dataframe(df_seq, use_container_width=True, hide_index=True)
+            else:
+                st.info("No hay secuencias generadas aún.")
+        else:
+            st.info("Seleccione una empresa para configurar la numeración.")
 
 
 # ══════════════════════════════════════════════════════════════
