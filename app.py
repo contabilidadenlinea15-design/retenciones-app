@@ -435,6 +435,21 @@ def page_facturas():
                 prov["porcentaje_retencion_iva"] = pct_iva_override
 
             # Guardar factura
+            # ── CONTROL DE DUPLICADOS ─────────────────────────────
+            dup_check = sb.table("facturas").select("id").eq(
+                "empresa_id", eid
+            ).eq(
+                "proveedor_id", prov["id"]
+            ).eq(
+                "numero_documento", numero_doc.strip()
+            ).execute()
+            if dup_check.data:
+                st.error(
+                    f"⚠️ Ya existe una factura con el Nro. de Documento **{numero_doc.strip()}** "
+                    f"para el proveedor **{prov['nombre']}**. No se permite el registro duplicado."
+                )
+                return
+            # ─────────────────────────────────────────────────────
             factura_data = {
                 "empresa_id": eid,
                 "proveedor_id": prov["id"],
