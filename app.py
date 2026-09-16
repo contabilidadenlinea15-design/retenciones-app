@@ -558,15 +558,14 @@ def page_comprobantes():
                         st.write(f"**% Retención:** {r['porcentaje_retencion']}%")
                         st.write(f"**Monto Retenido:** {fmt(r['monto_retenido'])}")
 
-                    if st.button("📥 Descargar PDF", key=f"pdf_iva_{r['id']}"):
-                        pdf_bytes = generar_pdf_iva(emp_data, prov, fac, r)
-                        st.download_button(
-                            "⬇️ Guardar PDF",
-                            data=pdf_bytes,
-                            file_name=f"Comprobante_IVA_{r['numero_comprobante']}.pdf",
-                            mime="application/pdf",
-                            key=f"dl_iva_{r['id']}",
-                        )
+                    pdf_bytes = generar_pdf_iva(emp_data, prov, fac, r)
+                    st.download_button(
+                        "📥 Descargar PDF",
+                        data=pdf_bytes,
+                        file_name=f"Comprobante_IVA_{r['numero_comprobante']}.pdf",
+                        mime="application/pdf",
+                        key=f"dl_iva_{r['id']}",
+                    )
         else:
             st.info("No hay comprobantes de IVA generados.")
 
@@ -588,15 +587,14 @@ def page_comprobantes():
                         st.write(f"**% Retención:** {r['porcentaje_retencion']}%")
                         st.write(f"**Monto Retenido:** {fmt(r['monto_retenido'])}")
 
-                    if st.button("📥 Descargar PDF", key=f"pdf_islr_{r['id']}"):
-                        pdf_bytes = generar_pdf_islr(emp_data, prov, fac, r)
-                        st.download_button(
-                            "⬇️ Guardar PDF",
-                            data=pdf_bytes,
-                            file_name=f"Comprobante_ISLR_{r['numero_comprobante']}.pdf",
-                            mime="application/pdf",
-                            key=f"dl_islr_{r['id']}",
-                        )
+                    pdf_bytes = generar_pdf_islr(emp_data, prov, fac, r)
+                    st.download_button(
+                        "📥 Descargar PDF",
+                        data=pdf_bytes,
+                        file_name=f"Comprobante_ISLR_{r['numero_comprobante']}.pdf",
+                        mime="application/pdf",
+                        key=f"dl_islr_{r['id']}",
+                    )
         else:
             st.info("No hay comprobantes de ISLR generados.")
 
