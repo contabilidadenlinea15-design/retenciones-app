@@ -1083,9 +1083,27 @@ def page_admin():
                 telefono_e = st.text_input("Teléfono")
                 email_e = st.text_input("Email")
                 zona_postal_e = st.text_input("Zona Postal")
+
+            st.divider()
+            st.markdown("#### 🔢 Numeración Inicial de Comprobantes")
+            st.info("Indique desde qué número deben iniciar los comprobantes de retención.")
+            ci1, ci2 = st.columns(2)
+            with ci1:
+                inicio_iva = st.number_input(
+                    "Primer Nro. Comprobante Retención IVA",
+                    min_value=1, max_value=99999999, value=1, step=1,
+                    key="inicio_iva_emp"
+                )
+            with ci2:
+                inicio_islr = st.number_input(
+                    "Primer Nro. Comprobante Retención ISLR",
+                    min_value=1, max_value=99999999, value=1, step=1,
+                    key="inicio_islr_emp"
+                )
+
             if st.form_submit_button("✅ Crear Empresa"):
                 if nombre_e and rif_e:
-                    sb.table("empresas").insert({
+                    res = sb.table("empresas").insert({
                         "nombre": nombre_e.upper().strip(),
                         "rif": rif_e.upper().strip(),
                         "direccion": direccion_e,
@@ -1093,7 +1111,22 @@ def page_admin():
                         "email": email_e,
                         "zona_postal": zona_postal_e,
                     }).execute()
-                    st.success(f"Empresa {nombre_e} creada")
+                    nueva_empresa_id = res.data[0]["id"]
+                    # Crear configuración de comprobantes
+                    try:
+                        sb.table("config_comprobantes").insert({
+                            "empresa_id": nueva_empresa_id,
+                            "tipo": "IVA",
+                            "numero_inicial": inicio_iva,
+                        }).execute()
+                        sb.table("config_comprobantes").insert({
+                            "empresa_id": nueva_empresa_id,
+                            "tipo": "ISLR",
+                            "numero_inicial": inicio_islr,
+                        }).execute()
+                    except Exception:
+                        pass
+                    st.success(f"Empresa {nombre_e} creada con numeración IVA desde {inicio_iva} e ISLR desde {inicio_islr}")
                     st.rerun()
                 else:
                     st.error("Nombre y RIF son obligatorios")
