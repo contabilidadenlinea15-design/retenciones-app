@@ -787,7 +787,7 @@ def generar_pdf_iva(empresa, proveedor, factura, retencion):
     pdf.set_xy(30, y)
     pdf.cell(80, 4, empresa.get("rif", ""), align="C")
 
-    return pdf.output()
+    return bytes(pdf.output())
 
 
 def generar_pdf_islr(empresa, proveedor, factura, retencion):
@@ -974,7 +974,7 @@ def generar_pdf_islr(empresa, proveedor, factura, retencion):
     pdf.set_xy(20, y)
     pdf.cell(70, 4, empresa.get("rif", ""), align="C")
 
-    return pdf.output()
+    return bytes(pdf.output())
 
 
 # ══════════════════════════════════════════════════════════════
