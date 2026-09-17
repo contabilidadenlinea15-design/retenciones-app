@@ -1131,6 +1131,83 @@ def page_admin():
                 else:
                     st.error("Nombre y RIF son obligatorios")
 
+        # ── Editar Empresa ──
+        if empresas:
+            st.divider()
+            st.markdown("### ✏️ Editar Empresa")
+            opciones_emp = {f"{e['nombre']} ({e['rif']})": e for e in empresas}
+            sel_emp = st.selectbox("Seleccione empresa a editar", list(opciones_emp.keys()), key="sel_edit_emp")
+            if sel_emp:
+                emp_edit = opciones_emp[sel_emp]
+                with st.form("form_editar_empresa"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        ed_nombre = st.text_input("Nombre / Razón Social", value=emp_edit["nombre"], key="ed_nombre")
+                        ed_rif = st.text_input("RIF", value=emp_edit["rif"], key="ed_rif")
+                        ed_direccion = st.text_input("Dirección Fiscal", value=emp_edit.get("direccion") or "", key="ed_dir")
+                    with c2:
+                        ed_telefono = st.text_input("Teléfono", value=emp_edit.get("telefono") or "", key="ed_tel")
+                        ed_email = st.text_input("Email", value=emp_edit.get("email") or "", key="ed_email")
+                        ed_zona = st.text_input("Zona Postal", value=emp_edit.get("zona_postal") or "", key="ed_zona")
+
+                    st.divider()
+                    st.markdown("#### 🔢 Numeración de Comprobantes")
+                    # Leer config actual
+                    try:
+                        cfg_iva = sb.table("config_comprobantes").select("*").eq("empresa_id", emp_edit["id"]).eq("tipo", "IVA").execute()
+                        val_iva = cfg_iva.data[0]["numero_inicial"] if cfg_iva.data else 1
+                    except Exception:
+                        val_iva = 1
+                    try:
+                        cfg_islr = sb.table("config_comprobantes").select("*").eq("empresa_id", emp_edit["id"]).eq("tipo", "ISLR").execute()
+                        val_islr = cfg_islr.data[0]["numero_inicial"] if cfg_islr.data else 1
+                    except Exception:
+                        val_islr = 1
+
+                    ce1, ce2 = st.columns(2)
+                    with ce1:
+                        ed_inicio_iva = st.number_input(
+                            "Primer Nro. Comprobante Retención IVA",
+                            min_value=1, max_value=99999999, value=val_iva, step=1,
+                            key="ed_inicio_iva"
+                        )
+                    with ce2:
+                        ed_inicio_islr = st.number_input(
+                            "Primer Nro. Comprobante Retención ISLR",
+                            min_value=1, max_value=99999999, value=val_islr, step=1,
+                            key="ed_inicio_islr"
+                        )
+
+                    if st.form_submit_button("💾 Guardar Cambios"):
+                        sb.table("empresas").update({
+                            "nombre": ed_nombre.upper().strip(),
+                            "rif": ed_rif.upper().strip(),
+                            "direccion": ed_direccion,
+                            "telefono": ed_telefono,
+                            "email": ed_email,
+                            "zona_postal": ed_zona,
+                        }).eq("id", emp_edit["id"]).execute()
+                        # Actualizar o crear config comprobantes
+                        try:
+                            for tipo_c, nuevo_val in [("IVA", ed_inicio_iva), ("ISLR", ed_inicio_islr)]:
+                                cfg_exist = sb.table("config_comprobantes").select("id").eq(
+                                    "empresa_id", emp_edit["id"]
+                                ).eq("tipo", tipo_c).execute()
+                                if cfg_exist.data:
+                                    sb.table("config_comprobantes").update({
+                                        "numero_inicial": nuevo_val
+                                    }).eq("id", cfg_exist.data[0]["id"]).execute()
+                                else:
+                                    sb.table("config_comprobantes").insert({
+                                        "empresa_id": emp_edit["id"],
+                                        "tipo": tipo_c,
+                                        "numero_inicial": nuevo_val,
+                                    }).execute()
+                        except Exception:
+                            pass
+                        st.success(f"Empresa {ed_nombre} actualizada")
+                        st.rerun()
+
     # ── Usuarios ──
     with tab2:
         usuarios = sb.table("usuarios").select("id, username, nombre, rol, empresa_id, activo").order("username").execute().data or []
