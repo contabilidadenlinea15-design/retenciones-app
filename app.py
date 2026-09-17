@@ -541,6 +541,46 @@ def page_facturas():
                 })
             df = pd.DataFrame(rows)
             st.dataframe(df, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.markdown("### 🗑️ Eliminar Factura")
+            st.warning("⚠️ **Orden de eliminación:** Primero debe eliminar los comprobantes "
+                       "(retenciones IVA/ISLR) asociados a la factura antes de poder eliminarla.")
+            opciones_fac = [f"{f['numero_documento']} — {(f.get('proveedores') or {}).get('nombre', '')}" for f in facturas]
+            sel_fac = st.selectbox("Seleccione factura a eliminar", opciones_fac, key="sel_fac_del")
+            idx_fac = opciones_fac.index(sel_fac)
+            fac_sel = facturas[idx_fac]
+
+            if st.button("🗑️ Verificar y Eliminar Factura", key="btn_del_fac"):
+                # Verificar retenciones IVA asociadas
+                rets_iva = sb.table("retenciones_iva").select("id, numero_comprobante").eq("factura_id", fac_sel["id"]).execute().data or []
+                rets_islr = sb.table("retenciones_islr").select("id, numero_comprobante").eq("factura_id", fac_sel["id"]).execute().data or []
+
+                if rets_iva or rets_islr:
+                    st.error("❌ **No se puede eliminar esta factura.** Tiene comprobantes asociados que debe eliminar primero:")
+                    if rets_iva:
+                        for ri in rets_iva:
+                            st.write(f"  - Comprobante IVA: **{ri['numero_comprobante']}**")
+                    if rets_islr:
+                        for ri in rets_islr:
+                            st.write(f"  - Comprobante ISLR: **{ri['numero_comprobante']}**")
+                    st.info("👉 Vaya a la sección **Comprobantes** y elimine estos comprobantes primero.")
+                else:
+                    st.session_state["confirm_del_fac"] = fac_sel["id"]
+
+            if st.session_state.get("confirm_del_fac") == fac_sel["id"]:
+                st.warning(f"¿Confirma eliminar la factura **{fac_sel['numero_documento']}**?")
+                c_si, c_no = st.columns(2)
+                with c_si:
+                    if st.button("✅ Sí, eliminar factura", key="yes_del_fac"):
+                        sb.table("facturas").delete().eq("id", fac_sel["id"]).execute()
+                        st.session_state.pop("confirm_del_fac", None)
+                        st.success("✅ Factura eliminada correctamente.")
+                        st.rerun()
+                with c_no:
+                    if st.button("❌ Cancelar", key="no_del_fac"):
+                        st.session_state.pop("confirm_del_fac", None)
+                        st.rerun()
         else:
             st.info("No hay facturas registradas.")
 
@@ -581,13 +621,30 @@ def page_comprobantes():
                         st.write(f"**Monto Retenido:** {fmt(r['monto_retenido'])}")
 
                     pdf_bytes = generar_pdf_iva(emp_data, prov, fac, r)
-                    st.download_button(
-                        "📥 Descargar PDF",
-                        data=pdf_bytes,
-                        file_name=f"Comprobante_IVA_{r['numero_comprobante']}.pdf",
-                        mime="application/pdf",
-                        key=f"dl_iva_{r['id']}",
-                    )
+                    col_dl, col_del = st.columns([3, 1])
+                    with col_dl:
+                        st.download_button(
+                            "📥 Descargar PDF",
+                            data=pdf_bytes,
+                            file_name=f"Comprobante_IVA_{r['numero_comprobante']}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_iva_{r['id']}",
+                        )
+                    with col_del:
+                        if st.button("🗑️ Eliminar", key=f"del_iva_{r['id']}", type="secondary"):
+                            st.session_state[f"confirm_del_iva_{r['id']}"] = True
+                        if st.session_state.get(f"confirm_del_iva_{r['id']}", False):
+                            st.warning("¿Está seguro de eliminar este comprobante de IVA?")
+                            c_si, c_no = st.columns(2)
+                            with c_si:
+                                if st.button("✅ Sí, eliminar", key=f"yes_del_iva_{r['id']}"):
+                                    sb.table("retenciones_iva").delete().eq("id", r["id"]).execute()
+                                    st.success("Comprobante IVA eliminado.")
+                                    st.rerun()
+                            with c_no:
+                                if st.button("❌ Cancelar", key=f"no_del_iva_{r['id']}"):
+                                    st.session_state[f"confirm_del_iva_{r['id']}"] = False
+                                    st.rerun()
         else:
             st.info("No hay comprobantes de IVA generados.")
 
@@ -610,13 +667,30 @@ def page_comprobantes():
                         st.write(f"**Monto Retenido:** {fmt(r['monto_retenido'])}")
 
                     pdf_bytes = generar_pdf_islr(emp_data, prov, fac, r)
-                    st.download_button(
-                        "📥 Descargar PDF",
-                        data=pdf_bytes,
-                        file_name=f"Comprobante_ISLR_{r['numero_comprobante']}.pdf",
-                        mime="application/pdf",
-                        key=f"dl_islr_{r['id']}",
-                    )
+                    col_dl, col_del = st.columns([3, 1])
+                    with col_dl:
+                        st.download_button(
+                            "📥 Descargar PDF",
+                            data=pdf_bytes,
+                            file_name=f"Comprobante_ISLR_{r['numero_comprobante']}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_islr_{r['id']}",
+                        )
+                    with col_del:
+                        if st.button("🗑️ Eliminar", key=f"del_islr_{r['id']}", type="secondary"):
+                            st.session_state[f"confirm_del_islr_{r['id']}"] = True
+                        if st.session_state.get(f"confirm_del_islr_{r['id']}", False):
+                            st.warning("¿Está seguro de eliminar este comprobante de ISLR?")
+                            c_si, c_no = st.columns(2)
+                            with c_si:
+                                if st.button("✅ Sí, eliminar", key=f"yes_del_islr_{r['id']}"):
+                                    sb.table("retenciones_islr").delete().eq("id", r["id"]).execute()
+                                    st.success("Comprobante ISLR eliminado.")
+                                    st.rerun()
+                            with c_no:
+                                if st.button("❌ Cancelar", key=f"no_del_islr_{r['id']}"):
+                                    st.session_state[f"confirm_del_islr_{r['id']}"] = False
+                                    st.rerun()
         else:
             st.info("No hay comprobantes de ISLR generados.")
 
