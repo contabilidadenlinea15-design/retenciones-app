@@ -109,17 +109,31 @@ def fmt(n):
 
 
 def generar_numero_comprobante(sb, emp_id, tipo, fecha):
-    """Genera número correlativo de 14 dígitos: YYYYMM00000NNN."""
+    """Genera número correlativo de 14 dígitos: YYYYMM00000NNN.
+    El correlativo es continuo (no se reinicia por mes).
+    El número inicial de config_comprobantes solo aplica la primera vez."""
     anio = fecha.year
     mes = fecha.month
-    # Buscar secuencia existente
-    res = sb.table("secuencias_comprobantes").select("*").eq("empresa_id", emp_id).eq("tipo", tipo).eq("anio", anio).eq("mes", mes).execute()
-    if res.data:
-        seq = res.data[0]
-        nuevo = seq["ultimo_numero"] + 1
-        sb.table("secuencias_comprobantes").update({"ultimo_numero": nuevo}).eq("id", seq["id"]).execute()
+    # Buscar la secuencia más reciente de esta empresa y tipo (cualquier mes/año)
+    todas = sb.table("secuencias_comprobantes").select("*").eq(
+        "empresa_id", emp_id
+    ).eq("tipo", tipo).order("anio", desc=True).order("mes", desc=True).limit(1).execute()
+    if todas.data:
+        ultima = todas.data[0]
+        nuevo = ultima["ultimo_numero"] + 1
+        # Si ya existe registro para este mes, actualizar; si no, crear uno nuevo
+        res_mes = sb.table("secuencias_comprobantes").select("id").eq(
+            "empresa_id", emp_id
+        ).eq("tipo", tipo).eq("anio", anio).eq("mes", mes).execute()
+        if res_mes.data:
+            sb.table("secuencias_comprobantes").update({"ultimo_numero": nuevo}).eq("id", res_mes.data[0]["id"]).execute()
+        else:
+            sb.table("secuencias_comprobantes").insert({
+                "empresa_id": emp_id, "tipo": tipo,
+                "anio": anio, "mes": mes, "ultimo_numero": nuevo
+            }).execute()
     else:
-        # Buscar número inicial configurado para esta empresa y tipo
+        # Primera vez: usar número inicial de config_comprobantes
         try:
             cfg = sb.table("config_comprobantes").select("numero_inicial").eq(
                 "empresa_id", emp_id
